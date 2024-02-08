@@ -1,144 +1,169 @@
-#include "main.h"
+#include "shell.h"
 
 /**
- * _realloc - Reallocates a memory block using malloc and free.
- * @ptr: A pointer to the memory previously allocated.
- * @old_size: The size in bytes of the allocated space for ptr.
- * @new_size: The size in bytes for the new memory block.
- *
- * Return: If new_size == old_size - ptr.
- *         If new_size == 0 and ptr is not NULL - NULL.
- *         Otherwise - a pointer to the reallocated memory block.
+ * input_buf - buff chain the command
+ * @info: parameter of the  structure
+ * @buf: address of the  buffer
+ * @len: address of len variable
+ *Author : temesgenabissa and amanuel dessalegn
+ * Return: see the bytes
  */
-
-void *_realloc(void *ptr, unsigned int old_size, unsigned int new_size)
+ssize_t input_buf(info_t *info, char **buf, size_t *len)
 {
-	void *mem;
-	char *ptr_copy, *filler;
-	unsigned int index;
+	ssize_t r = 0;
+	size_t len_p = 0;
 
-	if (new_size == old_size)
-		return (ptr);
-
-	if (ptr == NULL)
+	if (!*len) /* if nothing left in the buffer, fill it */
 	{
-		mem = malloc(new_size);
-		if (mem == NULL)
-			return (NULL);
-
-		return (mem);
-	}
-
-	if (new_size == 0 && ptr != NULL)
-	{
-		free(ptr);
-		return (NULL);
-	}
-
-	ptr_copy = ptr;
-	mem = malloc(sizeof(*ptr_copy) * new_size);
-	if (mem == NULL)
-	{
-		free(ptr);
-		return (NULL);
-	}
-
-	filler = mem;
-
-	for (index = 0; index < old_size && index < new_size; index++)
-		filler[index] = *ptr_copy++;
-
-	free(ptr);
-	return (mem);
-}
-
-/**
- * _getline - reads input.
- * @lineptr: buffer to store the input.
- * @n: the size.
- * @stream: the stream to read from.
- * Return: the number of bytes.
- */
-
-ssize_t _getline(char **lineptr, size_t *n, FILE *stream)
-{
-	static ssize_t input;
-	ssize_t ret;
-	char c = 'x', *buffer, *tmp;
-	int r;
-
-	if (input == 0)
-		fflush(stream);
-	else
-		return (-1);
-	input = 0;
-
-	buffer = malloc(sizeof(char) * 10); /* allocate a small initial buffer */
-	if (!buffer)
-		return (-1);
-
-	while (c != '\n')
-	{
-		r = read(STDIN_FILENO, &c, 1);
-		if (r == -1 || (r == 0 && input == 0))
+		/*bfree((void **)info->cmd_buf);*/
+		free(*buf);
+		*buf = NULL;
+		signal(SIGINT, sigintHandler);
+#if USE_GETLINE
+		r = getline(buf, &len_p, stdin);
+#else
+		r = _getline(info, buf, &len_p);
+#endif
+		if (r > 0)
 		{
-			free(buffer);
-			return (-1);
-		}
-		if (r == 0 && input != 0)
-		{
-			input++;
-			break;
-		}
-
-		buffer[input] = c;
-		input++;
-
-		if (input % 10 == 0) /* if the buffer is full */
-		{
-			tmp = realloc(buffer, input + 10); /* resize the buffer by 10 more bytes */
-			if (!tmp)						   /* if realloc fails */
+			if ((*buf)[r - 1] == '\n')
 			{
-				free(buffer);
-				return (-1);
+				(*buf)[r - 1] = '\0'; /* remove trailing newline */
+				r--;
 			}
-			buffer = tmp; /* assign the new buffer to the old one */
+			info->linecount_flag = 1;
+			remove_comments(*buf);
+			build_history_list(info, *buf, info->histcount++);
+			/* if (_strchr(*buf, ';')) is this a command chain? */
+			{
+				*len = r;
+				info->cmd_buf = buf;
+			}
 		}
 	}
-	buffer[input] = '\0';
-
-	assign_lineptr(lineptr, n, buffer, input);
-
-	ret = input;
-	if (r != 0)
-		input = 0;
-	return (ret);
+	return (r);
 }
 
 /**
- * assign_lineptr - reassign the lineptr variable.
- * @lineptr: buffer to store input.
- * @n: the size.
- * @buffer: the string to be assigned.
- * @b: the size of buffer.
+ * get_input - get a line minus  newline
+ * @info: parameter of the  structure
+ * Author: temesgen abdissa and amanuel desalegn
+ * Return: bytes read
  */
-
-void assign_lineptr(char **lineptr, size_t *n, char *buffer, size_t b)
+ssize_t get_input(info_t *info)
 {
-	if (*lineptr == NULL)
+	static char *buf; /* the ';' command chain buffer */
+	static size_t i, j, len;
+	ssize_t r = 0;
+	char **buf_p = &(info->arg), *p;
+
+	_putchar(BUF_FLUSH);
+	r = input_buf(info, &buf, &len);
+	if (r == -1) /* EOF */
+		return (-1);
+	if (len)	/* we have commands left in the chain buffer */
 	{
-		*n = (b > 120) ? b : 120; /* use a ternary operator to assign n */
-		*lineptr = buffer;
+		j = i; /* init new iterator to current buf position */
+		p = buf + i; /* get pointer for return */
+
+		check_chain(info, buf, &j, i, len);
+		while (j < len) /* iterate to semicolon or end */
+		{
+			if (is_chain(info, buf, &j))
+				break;
+			j++;
+		}
+
+		i = j + 1; /* increment past nulled ';'' */
+		if (i >= len) /* reached end of buffer? */
+		{
+			i = len = 0; /* reset position and length */
+			info->cmd_buf_type = CMD_NORM;
+		}
+
+		*buf_p = p; /* pass back pointer to current command position */
+		return (_strlen(p)); /* return length of current command */
 	}
-	else if (*n < b)
-	{
-		*n = (b > 120) ? b : 120; /* use a ternary operator to assign n */
-		*lineptr = buffer;
-	}
+
+	*buf_p = buf; /* else not a chain, pass back buffer from _getline() */
+	return (r); /* return length of buffer from _getline() */
+}
+
+/**
+ * read_buf - see the buffers
+ * @info: par of the  struct
+ * @buf: buffer
+ * @i: size
+ * author: temesgen and amanuel dessalegn
+ * Return:  return r
+ */
+ssize_t read_buf(info_t *info, char *buf, size_t *i)
+{
+	ssize_t r = 0;
+
+	if (*i)
+		return (0);
+	r = read(info->readfd, buf, READ_BUF_SIZE);
+	if (r >= 0)
+		*i = r;
+	return (r);
+}
+
+/**
+ * _getline - get  a next line of the  input from STDIN
+ * @info: parameter of the  struct
+ * @ptr: address of the  pointer to bufferand  preallocate or NULL
+ * @length: size of preallocate ptr  buffer if not Nothing
+ * author : temesgen abdissa and amanuel dessalegn
+ * Return: s
+ */
+int _getline(info_t *info, char **ptr, size_t *length)
+{
+	static char buf[READ_BUF_SIZE];
+	static size_t i, len;
+	size_t k;
+	ssize_t r = 0, s = 0;
+	char *p = NULL, *new_p = NULL, *c;
+
+	p = *ptr;
+	if (p && length)
+		s = *length;
+	if (i == len)
+		i = len = 0;
+
+	r = read_buf(info, buf, &len);
+	if (r == -1 || (r == 0 && len == 0))
+		return (-1);
+
+	c = _strchr(buf + i, '\n');
+	k = c ? 1 + (unsigned int)(c - buf) : len;
+	new_p = _realloc(p, s, s ? s + k : k + 1);
+	if (!new_p) /* MALLOC FAILURE! */
+		return (p ? free(p), -1 : -1);
+
+	if (s)
+		_strncat(new_p, buf + i, k - i);
 	else
-	{
-		_strcpy(*lineptr, buffer); /* use strcpy() function to copy the buffer */
-		if (buffer != NULL) /* check if buffer is NULL before freeing it */
-			free(buffer);
-	}
+		_strncpy(new_p, buf + i, k - i + 1);
+
+	s += k - i;
+	i = k;
+	p = new_p;
+
+	if (length)
+		*length = s;
+	*ptr = p;
+	return (s);
+}
+/**
+ * sigintHandler - blocks ctrl-C
+ * @sig_num: the signal number
+ *
+ * Return: void
+ */
+void sigintHandler(__attribute__((unused))int sig_num)
+{
+	_puts("\n");
+	_puts("$ ");
+	_putchar(BUF_FLUSH);
 }

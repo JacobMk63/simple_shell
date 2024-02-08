@@ -11,7 +11,6 @@
 #include <sys/stat.h>
 #include <errno.h>
 #include <fcntl.h>
-#include <shell.h>
 
 /* for reading /writes of the  buffers */
 #define READ_BUF_SIZE 1024
@@ -154,7 +153,7 @@ char *_strncat(char *, char *, int);
 char **strtow2(char *, char);
 char **strtow(char *, char *);
 
-/* _atoi.c */
+/* atoi.c */
 int interactive(info_t *);
 int is_delim(char, char *);
 int _isalpha(int);
