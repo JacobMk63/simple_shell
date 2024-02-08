@@ -1,159 +1,107 @@
-#include "shell.h"
+#include "main.h"
 
 /**
- * add_node - plusnode to startlist
- * @head: address of the  pointerto headNode
- * @str: strings fieldnode
- * @num: nodeof the  index use in histry
- * author: temesgen abdissa and amanuel dessalegn
- * Return: sizelist
+ * add_node_end - adds a new node at the end of a linked list of directories
+ * @head: the head of the list
+ * @dir: path for the new node
+ * Return: new node , null if error
  */
-list_t *add_node(list_t **head, const char *str, int num)
-{
-	list_t *new_head;
 
-	if (!head)
+list_t *add_node_end(list_t **head, char *dir)
+{
+	list_t *last; /*pointer to store the last node */
+	/* allocate memory fr the new node */
+	list_t *new_node = malloc(sizeof(list_t));
+
+	if (!new_node) /* check f meory allocation failed */
 		return (NULL);
-	new_head = malloc(sizeof(list_t));
-	if (!new_head)
-		return (NULL);
-	_memset((void *)new_head, 0, sizeof(list_t));
-	new_head->num = num;
-	if (str)
+	new_node->dir = dir; /* assign dir name to new node */
+	new_node->next = NULL; /* set next pointer of new node to null*/
+	if (*head) /** check if the list is not empty */
 	{
-		new_head->str = _strdup(str);
-		if (!new_head->str)
-		{
-			free(new_head);
-			return (NULL);
-		}
+		last = *head;
+		while (last->next != NULL) /* loop until the last node*/
+			last = last->next; /* move to next node */
+		last->next = new_node; /* link last node to new node */
 	}
-	new_head->next = *head;
-	*head = new_head;
-	return (new_head);
+	else
+		/* if the list is empty, set the head to new node */
+		*head = new_node;
+	return (new_node); /* return the new node */
 }
 
 /**
- * add_node - plusnode to startlist
- * @head: address of the  pointerto headNode
- * @str: strings fieldnode
- * @num: nodeof the  index use in histry
- * author: temesgen abdissa and amanuel dessalegn
- * Return: sizelist
+ * add_alias_end - adds a new alias at the end of a linked list of aliases
+ * @head: pointer to the head of the list
+ * @name: ame of the new alias to add
+ * @value: value of the new alias
+ * Return: the new node, NULL if fail
  */
-list_t *add_node_end(list_t **head, const char *str, int num)
+
+alias_t *add_alias_end(alias_t **head, char *name, char *value)
 {
-	list_t *new_node, *node;
+	/* Allocate memory for the new alias */
+	alias_t *new_node = malloc(sizeof(alias_t));
+	alias_t *last; /* pointer to store the last alisas */
 
-	if (!head)
+	if (!new_node) /* Check if memory allocation failed */
 		return (NULL);
-
-	node = *head;
-	new_node = malloc(sizeof(list_t));
-	if (!new_node)
-		return (NULL);
-	_memset((void *)new_node, 0, sizeof(list_t));
-	new_node->num = num;
-	if (str)
+	new_node->next = NULL; /* set the next to NULL */
+	/* Allocate memory for the alias name */
+	new_node->name = malloc(sizeof(char) * (_strlen(name) + 1));
+	if (!new_node->name) /* Check if memory allocation failed */
 	{
-		new_node->str = _strdup(str);
-		if (!new_node->str)
-		{
-			free(new_node);
-			return (NULL);
-		}
+		free(new_node); /* free te nea alias */
+		return (NULL);
 	}
-	if (node)
+	new_node->value = value; /* Assign the alias value to the new alias */
+	_strcpy(new_node->name, name); /*Copy the alias name to the new alias */
+	if (*head) /* check if the list is not empty */
 	{
-		while (node->next)
-			node = node->next;
-		node->next = new_node;
+		last = *head; /* Initialize the last pointer to the head of the list*/
+		while (last->next != NULL) /*Loop until the last alias is found */
+			last = last->next; /*Move the last pointer to the next alias */
+		last->next = new_node; /* Link the last alias to the new alias */
 	}
 	else
 		*head = new_node;
 	return (new_node);
 }
-
 /**
- * print_list_str - displays  the str element of list_tLinkedlist
- * @h: point of the firstNode
- * Author:temesgen abdissa and amanuel dessalegn
- * Return: sizelist
+ * free_list - frees a lined list of directories
+ * @head: the head of list
  */
-size_t print_list_str(const list_t *h)
-{
-	size_t i = 0;
 
-	while (h)
+void free_list(list_t *head)
+{
+	list_t *next; /* a pointer to store the next node */
+
+	while (head) /* loop until the list is empty */
 	{
-		_puts(h->str ? h->str : "(nil)");
-		_puts("\n");
-		h = h->next;
-		i++;
+		next = head->next; /* save the next node */
+		free(head->dir); /* free the directory name */
+		free(head); /* free the current node */
+		head = next;
 	}
-	return (i);
 }
 
 /**
- * delete_node_at_index - removenode at a point index
- * @head: address of point to firstNode
- * @index: index of node to remove
- * author:temesgen abdissa and amanuel dessalegn
- * Return:returns  1 shows success, 0 else failure
+ * free_alias_list - free a alias lined list.
+ * @head: the head of the list.
  */
-int delete_node_at_index(list_t **head, unsigned int index)
+
+void free_alias_list(alias_t *head)
 {
-	list_t *node, *prev_node;
-	unsigned int i = 0;
+	alias_t *next;/* a pointer t ostore the next alias */
 
-	if (!head || !*head)
-		return (0);
-
-	if (!index)
+	if (head == NULL)/* check if head is NULL */
+		return;/* do nothing if head is NULL */
+	while (head)/* loop until the list is empty */
 	{
-		node = *head;
-		*head = (*head)->next;
-		free(node->str);
-		free(node);
-		return (1);
+		next = head->next;/* save tje mext alias*/
+		free(head->name);/* free the alias name */
+		free(head->value);/* free alias value */
+		free(head);/* free the current */
+		head = next;/* move to the next */
 	}
-	node = *head;
-	while (node)
-	{
-		if (i == index)
-		{
-			prev_node->next = node->next;
-			free(node->str);
-			free(node);
-			return (1);
-		}
-		i++;
-		prev_node = node;
-		node = node->next;
-	}
-	return (0);
-}
-
-/**
- * free_list - free nodes of the list
- * @head_ptr: address of the  point to the  headNode
- * author: temesgen abdissa and amanuel dessalegn
- * Return: void or nothing
- */
-void free_list(list_t **head_ptr)
-{
-	list_t *node, *next_node, *head;
-
-	if (!head_ptr || !*head_ptr)
-		return;
-	head = *head_ptr;
-	node = head;
-	while (node)
-	{
-		next_node = node->next;
-		free(node->str);
-		free(node);
-		node = next_node;
-	}
-	*head_ptr = NULL;
 }

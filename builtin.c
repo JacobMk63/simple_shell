@@ -1,100 +1,106 @@
-#include "shell.h"
+#include "main.h"
 
 /**
- * _myexit - quit for shell
- * @info: Str contained  potential arguments. helped to maintain
- *          prototype.
- *  Return:quit  within the  given qiut stat
- *         (0) if info.argv[0] != "quit"
- *         AUTHOR : temesgen abdissa and amanuel desalegn
+ * get_builtin - returns a pointer to a builtin
+ * function that matches the given command.
+ * @command: The command to match.
+ * Return: A function pointer to the corresponding builtin.
  */
-int _myexit(info_t *info)
-{
-	int exitcheck;
 
-	if (info->argv[1])  /* If there is an exit arguement */
+int (*get_builtin(char *command))(char **args, char **front)
+{
+	/*array of structs that store the names and pointers of builtin functions*/
+	builtin_t funcs[] = {
+		{ "exit", shellby_exit },
+		{ "env", shellby_env },
+		{ "setenv", shellby_setenv },
+		{ "unsetenv", shellby_unsetenv },
+		{ "cd", shellby_cd },
+		{ "alias", shellby_alias },
+		{ "help", shellby_help },
+		{ NULL, NULL }
+	};
+	int i;
+
+	/* Loop through the array and compare the command with each name */
+	for (i = 0; funcs[i].name; i++)
 	{
-		exitcheck = _erratoi(info->argv[1]);
-		if (exitcheck == -1)
-		{
-			info->status = 2;
-			print_error(info, "Illegal number: ");
-			_eputs(info->argv[1]);
-			_eputchar('\n');
-			return (1);
-		}
-		info->err_num = _erratoi(info->argv[1]);
-		return (-2);
+		if (_strcmp(funcs[i].name, command) == 0)
+			break;
 	}
-	info->err_num = -1;
-	return (-2);
+	/* Return the pointer to the matching function or NULL if not found */
+	return (funcs[i].f);
 }
 
 /**
- * _mycd - convertes a  current directories  of the progress
- * @info: Str contained potential arguments. needs  to maintain
- *           prototype.
- *  Return: Always  returns nothing 0
- *  Author : temesgen abdissa and amauel desalegn
+ * shellby_exit - exits the shell program.
+ * @args: array of arguments containing the exit value.
+ * @front: pointer to the beginning of args.
+ * Return: if there are no arguments - -3.
+ * if the given exit value is invalid - 2.
+ * otherwise  exits with the given status value.
  */
-int _mycd(info_t *info)
-{
-	char *s, *dir, buffer[1024];
-	int chdir_ret;
 
-	s = getcwd(buffer, 1024);
-	if (!s)
-		_puts("TODO: >>getcwd failure emsg here<<\n");
-	if (!info->argv[1])
+int shellby_exit(char **args, char **front)
+{
+	int i, len_of_int = 10;
+	unsigned int num = 0, max = 1 << (sizeof(int) * 8 - 1);
+
+	if (args == NULL || args[0] == NULL) /* check if args is NULL or empty */
+		return (-3); /* exit with status 0 */
+
+	if (args[0][0] == '+')
 	{
-		dir = _getenv(info, "HOME=");
-		if (!dir)
-			chdir_ret = /* TODO: what should this be? */
-				chdir((dir = _getenv(info, "PWD=")) ? dir : "/");
+		i = 1;
+		len_of_int++;
+	}
+	for (; args[0][i]; i++)
+	{
+		if (i <= len_of_int && args[0][i] >= '0' && args[0][i] <= '9')
+			num = (num * 10) + (args[0][i] - '0');
 		else
-			chdir_ret = chdir(dir);
+			return (create_error(--args, 2)); /* return an error if args[0] is not a valid integer */
 	}
-	else if (_strcmp(info->argv[1], "-") == 0)
-	{
-		if (!_getenv(info, "OLDPWD="))
-		{
-			_puts(s);
-			_putchar('\n');
-			return (1);
-		}
-		_puts(_getenv(info, "OLDPWD=")), _putchar('\n');
-		chdir_ret = /* TODO: what should this be? */
-			chdir((dir = _getenv(info, "OLDPWD=")) ? dir : "/");
-	}
-	else
-		chdir_ret = chdir(info->argv[1]);
-	if (chdir_ret == -1)
-	{
-		print_error(info, "can't cd to ");
-		_eputs(info->argv[1]), _eputchar('\n');
-	}
-	else
-	{
-		_setenv(info, "OLDPWD", _getenv(info, "PWD="));
-		_setenv(info, "PWD", getcwd(buffer, 1024));
-	}
-	return (0);
+	if (args[1] != NULL) /* check if there is more than one argument */
+		return (create_error(--args, 2)); /* return an error if there is more than one argument */
+
+	if (num > max - 1)
+		return (create_error(--args, 2)); /* return an error if num is too large */
+
+	args -= 1;
+	free_args(args, front);	  /* free the arguments */
+	free_env(); /* free the environment variables */
+	free_alias_list(aliases); /* free the aliases */
+	exit(num);/* exit with status num */
 }
 
 /**
- * _myhelp - converted a current directories of the progress
- * @info: Stru contains potential arguments. needed to maintain
- *          prototype.
- *  Return: Always return nothing 0
- *  author : temesgen abdissa amanuel desalegn
+ * shellby_help - Displays information about shellby builtin commands.
+ * @args: An array of arguments.
+ * @front: A pointer to the beginning of args.
+ * Return: If an error occurs - -1.otherwise - 0.
  */
-int _myhelp(info_t *info)
-{
-	char **arg_array;
 
-	arg_array = info->argv;
-	_puts("help call works. Function not yet implemented \n");
-	if (0)
-		_puts(*arg_array); /* temp att_unused workaround */
+int shellby_help(char **args, char __attribute__((__unused__)) **front)
+{
+	if (!args[0])
+		help_all();
+	else if (_strcmp(args[0], "alias") == 0)
+		help_alias();
+	else if (_strcmp(args[0], "cd") == 0)
+		help_cd();
+	else if (_strcmp(args[0], "exit") == 0)
+		help_exit();
+	else if (_strcmp(args[0], "env") == 0)
+		help_env();
+	else if (_strcmp(args[0], "setenv") == 0)
+		help_setenv();
+	else if (_strcmp(args[0], "unsetenv") == 0)
+		help_unsetenv();
+	else if (_strcmp(args[0], "help") == 0)
+		help_help();
+	else
+		write(STDERR_FILENO, program_name, _strlen(program_name));
+
 	return (0);
 }
